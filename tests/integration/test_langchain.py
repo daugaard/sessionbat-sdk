@@ -7,6 +7,7 @@ from langchain_core.outputs import Generation, LLMResult
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.runnables import RunnableLambda, RunnablePassthrough
+from langchain_core.tools import tool
 from pydantic import Field
 
 from sessionbat import SessionBat
@@ -25,21 +26,23 @@ class StaticSupportRetriever(BaseRetriever):
         return self.documents
 
 
+@tool
+def lookup_account(account_id: str) -> dict[str, object]:
+    """Look up account status."""
+    return {"status": "locked", "password_reset_available": True}
+
+
 class TestLangChainIntegration:
     def setup_method(self) -> None:
         self.transport = MemoryTransport()
-        self.session = SessionBat(
+        self.client = SessionBat(
             transport=self.transport,
             default_tags=["development"],
             default_context={"environment": "test"},
-        ).session(
-            session_id="thread_123",
-            tags=["support-bot"],
-            context={"user_id": "user_123"},
         )
 
     def test_integrates_with_langchain_callback_manager(self) -> None:
-        handler = self.session.langchain_callback(tags=["langchain"])
+        handler = self.client.langchain_callback(tags=["langchain"])
         manager = CallbackManager([handler], metadata={"tenant": "acme"})
 
         llm_runs = manager.on_llm_start(
@@ -97,8 +100,37 @@ class TestLangChainIntegration:
         assert observations[2]["output"]["documents"][0]["id"] == "doc_reset_password"
         assert observations[2]["metrics"]["documents_found"] == 1
 
+    def test_integrates_with_langchain_tool_runnable(self) -> None:
+        handler = self.client.langchain_callback(tags=["langchain"])
+
+        result = lookup_account.invoke(
+            {"account_id": "acct_123"},
+            config={
+                "callbacks": [handler],
+                "metadata": {"session_id": "thread_tool", "tenant": "acme"},
+                "tags": ["tool"],
+            },
+        )
+
+        assert result == {"status": "locked", "password_reset_available": True}
+        assert len(self.transport.events) == 1
+
+        event = self.transport.events[0]
+        observation = event["observation"]
+
+        assert event["session_id"] == "thread_tool"
+        assert event["tags"] == ["development", "langchain", "tool"]
+        assert observation["kind"] == "tool"
+        assert observation["name"] == "lookup_account"
+        assert observation["input"]["inputs"] == {"account_id": "acct_123"}
+        assert observation["output"] == result
+        assert observation["metadata"]["framework"] == "langchain"
+        assert observation["metadata"]["langchain_serialized_name"] == "lookup_account"
+        assert observation["metadata"]["tenant"] == "acme"
+        assert "latency_ms" in observation["metrics"]
+
     def test_integrates_with_langchain_runnable_and_fake_chat_model(self) -> None:
-        handler = self.session.langchain_callback(tags=["langchain"])
+        handler = self.client.langchain_callback(tags=["langchain"])
         chain = ChatPromptTemplate.from_messages(
             [
                 ("system", "You help users recover account access."),
@@ -120,6 +152,7 @@ class TestLangChainIntegration:
 
         assert result.content == "Use the password reset link."
         assert len(self.transport.events) == 3
+        assert len({event["session_id"] for event in self.transport.events}) == 1
 
         system_event = self.transport.events[0]
         system_observation = system_event["observation"]
@@ -154,7 +187,7 @@ class TestLangChainIntegration:
         assert "invoke" in llm_event["tags"]
 
     def test_integrates_with_langchain_retrieval_chain(self) -> None:
-        handler = self.session.langchain_callback(tags=["langchain"])
+        handler = self.client.langchain_callback(tags=["langchain"])
         retriever = StaticSupportRetriever(
             name="StaticSupportRetriever",
             documents=[
@@ -194,6 +227,7 @@ class TestLangChainIntegration:
 
         assert result.content == "Use the password reset link from the sign-in page."
         assert len(self.transport.events) == 4
+        assert len({event["session_id"] for event in self.transport.events}) == 1
 
         retrieval_observation = self.transport.events[0]["observation"]
         system_observation = self.transport.events[1]["observation"]
@@ -223,6 +257,28 @@ class TestLangChainIntegration:
         assert llm_observation["output"]["text"] == result.content
         assert llm_observation["metadata"]["langchain_serialized_name"] == "FakeRagChat"
         assert "rag" in self.transport.events[3]["tags"]
+
+    def test_uses_langchain_metadata_session_id_when_present(self) -> None:
+        handler = self.client.langchain_callback(tags=["langchain"])
+        chain = ChatPromptTemplate.from_messages(
+            [
+                ("system", "You help users recover account access."),
+                ("human", "{question}"),
+            ]
+        ) | FakeListChatModel(
+            responses=["Use the password reset link."],
+            name="FakeSupportChat",
+        )
+
+        chain.invoke(
+            {"question": "I am locked out"},
+            config={
+                "callbacks": [handler],
+                "metadata": {"session_id": "thread_123", "tenant": "acme"},
+            },
+        )
+
+        assert {event["session_id"] for event in self.transport.events} == {"thread_123"}
 
 
 def _format_documents(documents: list[Document]) -> str:

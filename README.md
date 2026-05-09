@@ -109,8 +109,7 @@ before the assistant response.
 from sessionbat import SessionBat
 
 client = SessionBat(app="support-bot")
-session = client.session(session_id="thread_123")
-handler = session.langchain_callback(tags=["langchain"])
+handler = client.langchain_callback(tags=["langchain"])
 
 result = chain.invoke(
     {"input": "I am locked out of my account"},
@@ -127,6 +126,20 @@ It records:
 
 Callback errors are attached to the operation that failed where possible;
 chain-level errors are not emitted as standalone events.
+
+By default, the adapter groups each LangChain invocation under the root
+LangChain run id. If your application already has a stable conversation id,
+pass it through LangChain metadata:
+
+```python
+result = chain.invoke(
+    {"input": "I am locked out of my account"},
+    config={
+        "callbacks": [handler],
+        "metadata": {"session_id": "thread_123"},
+    },
+)
+```
 
 ## Development
 

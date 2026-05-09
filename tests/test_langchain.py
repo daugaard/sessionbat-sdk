@@ -52,6 +52,11 @@ class TestLangChainCallbackHandler:
         assert isinstance(handler, LangChainCallbackHandler)
         assert SessionBatCallbackHandler is LangChainCallbackHandler
 
+    def test_client_convenience_constructor_does_not_require_session_id(self) -> None:
+        handler = self.client.langchain_callback(tags=["langchain"])
+
+        assert isinstance(handler, LangChainCallbackHandler)
+
     def test_records_llm_completion_as_assistant_response(self) -> None:
         handler = self.session.langchain_callback(
             tags=["langchain"],
