@@ -4,7 +4,7 @@
 ![Ruff](https://img.shields.io/github/actions/workflow/status/daugaard/sessionbat-sdk/ruff.yml?branch=main)
 ![License](https://img.shields.io/github/license/daugaard/sessionbat-sdk)
 
-SessionBat is a small Python SDK for recording AI session activity and send it to SessionBat.
+SessionBat is a Python SDK for recording AI session activity and sending it to SessionBat.
 
 It is designed for teams that want to debug and understand what your AI app actually did, including:
 - user messages
