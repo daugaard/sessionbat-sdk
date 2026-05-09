@@ -35,14 +35,6 @@ def main() -> None:
         metrics={"latency_ms": 2150, "retry_count": 2},
     )
 
-    session.error(
-        name="assistant_response_failed",
-        message="The assistant could not answer because the upstream model request failed.",
-        error_type="llm_request_failed",
-        metadata={"provider": "openai", "customer_visible": True},
-        metrics={"retry_count": 2},
-    )
-
 
 if __name__ == "__main__":
     main()

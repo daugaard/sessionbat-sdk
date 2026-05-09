@@ -8,10 +8,9 @@ This repository currently focuses on a manual API built around completed observa
 - `assistant_response`
 - `tool_call`
 - `retrieval`
-- `error`
 
 Failures are attached to the operation that failed using its `error` payload,
-where possible, and can also be emitted as standalone `error` observations.
+rather than emitted as a separate standalone event type.
 
 The current shape is intentionally simple so we can pressure-test the data model before building a LangChain adapter.
 
