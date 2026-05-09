@@ -10,6 +10,9 @@ This repository currently focuses on a manual API built around completed observa
 - `retrieval`
 - `error`
 
+Failures are attached to the operation that failed using its `error` payload,
+where possible, and can also be emitted as standalone `error` observations.
+
 The current shape is intentionally simple so we can pressure-test the data model before building a LangChain adapter.
 
 ## Install
@@ -88,6 +91,25 @@ The repository also includes a few pressure-test traces:
 - `input` and `output` hold raw observation payloads.
 
 The SDK emits raw structured payloads via a transport. The default transport prints JSON lines to stdout so traces are easy to inspect locally.
+
+## LangChain Callback
+
+The LangChain adapter is optional and maps LangChain callbacks onto the same completed observations:
+
+```python
+from sessionbat import SessionBat
+
+client = SessionBat(app="support-bot")
+session = client.session(session_id="thread_123")
+handler = session.langchain_callback(tags=["langchain"])
+
+result = chain.invoke(
+    {"input": "I am locked out of my account"},
+    config={"callbacks": [handler]},
+)
+```
+
+It records LLM/chat model calls as `assistant_response`, tools as `tool_call`, and retrievers as `retrieval`. Callback errors are attached to the operation that failed where possible; chain-level errors are not emitted as standalone events.
 
 ## Design notes
 

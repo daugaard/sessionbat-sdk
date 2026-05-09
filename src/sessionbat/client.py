@@ -170,6 +170,22 @@ class Session:
             context=context,
         )
 
+    def langchain_callback(
+        self,
+        *,
+        tags: list[str] | None = None,
+        context: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> Any:
+        from .langchain import LangChainCallbackHandler
+
+        return LangChainCallbackHandler(
+            self,
+            tags=tags,
+            context=context,
+            metadata=metadata,
+        )
+
     def error(
         self,
         *,
