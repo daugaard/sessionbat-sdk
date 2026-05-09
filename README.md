@@ -1,49 +1,57 @@
 # SessionBat SDK
 
-SessionBat is an early SDK for capturing AI session activity through manual
-observations and framework adapters.
+![Tests](https://img.shields.io/github/actions/workflow/status/daugaard/sessionbat-sdk/tests.yml?branch=main)
+![Ruff](https://img.shields.io/github/actions/workflow/status/daugaard/sessionbat-sdk/ruff.yml?branch=main)
+![License](https://img.shields.io/github/license/daugaard/sessionbat-sdk)
 
-This repository currently focuses on a manual API built around completed observations that map cleanly onto common LangChain activity:
+SessionBat is a small Python SDK for recording AI session activity as structured
+JSON events.
 
-- `message`
-- `assistant_response`
-- `tool_call`
-- `retrieval`
+It is designed for teams that want to inspect what an AI app actually did in a
+conversation, including:
 
-Failures are attached to the operation that failed using its `error` payload,
-rather than emitted as a separate standalone event type.
+- user messages
+- assistant responses
+- tool calls
+- retrievals
+- failures attached to the operation that failed
 
-The current shape is intentionally simple so we can pressure-test the data model
-while adding framework-specific adapters incrementally.
+The default transport writes newline-delimited JSON to `stdout`, which makes it
+easy to inspect events locally or pipe them into another system.
 
 ## Install
 
 ```bash
-uv sync
+uv add sessionbat
 ```
 
-For development, install dev dependencies too:
+Or with `pip`:
+
+```bash
+pip install sessionbat
+```
+
+For local development in this repository:
 
 ```bash
 uv sync --dev
 ```
 
-## Example
+## Quickstart
 
 ```python
 from sessionbat import SessionBat
 
 client = SessionBat(
     app="support-bot",
-    default_tags=["development", "support-bot"],
-    default_context={"environment": "development"},
+    default_tags=["production"],
+    default_context={"environment": "prod"},
 )
 
 session = client.session(
     session_id="thread_123",
     context={
         "user_id": "user_123",
-        "user_email": "person@example.com",
         "workspace_id": "ws_456",
     },
 )
@@ -57,7 +65,6 @@ session.retrieval(
             "id": "doc_reset_password",
             "title": "Reset your password",
             "score": 0.93,
-            "snippet": "Use the password reset link from the sign-in page to receive an email reset link.",
         }
     ],
     metadata={"index": "support_articles"},
@@ -78,32 +85,61 @@ session.assistant_response(
     response={"text": "I found your account. Use the reset link and follow the email prompt."},
     metrics={"latency_ms": 820, "input_tokens": 142, "output_tokens": 36},
 )
-
 ```
 
-## Failure Mode Examples
+That emits structured events like:
 
-The repository also includes a few pressure-test traces:
+```json
+{
+  "type": "llm",
+  "session_id": "thread_123",
+  "tags": ["production"],
+  "context": {"environment": "prod", "user_id": "user_123", "workspace_id": "ws_456"},
+  "observation": {
+    "kind": "llm",
+    "name": "assistant_response"
+  }
+}
+```
 
-- [examples/failure_retrieval_miss.py](/home/soren/Projects/sessionbat/sessionbat-sdk/examples/failure_retrieval_miss.py): retrieval returns no documents, then the user rephrases the question
-- [examples/failure_tool_loop.py](/home/soren/Projects/sessionbat/sessionbat-sdk/examples/failure_tool_loop.py): the same tool is called repeatedly with no new information
-- [examples/failure_model_error.py](/home/soren/Projects/sessionbat/sessionbat-sdk/examples/failure_model_error.py): the upstream model request fails after retries
+## Core API
 
-## Data shape
+Import the main types from `sessionbat`:
 
-- `tags` are lightweight labels for stable filtering and grouping such as environment, app, or deployment.
-- `context` is user/account/application metadata attached to the whole session or a single observation.
-- `metadata` is descriptive operation data such as model, provider, index, or service name.
-- `metrics` is numeric operational data such as tokens, latency, cost, or HTTP status.
-- `input` and `output` hold raw observation payloads.
+```python
+from sessionbat import SessionBat, Session, LangChainCallbackHandler
+```
 
-The SDK emits raw structured payloads via a transport. The default transport prints JSON lines to stdout so traces are easy to inspect locally.
+### `SessionBat`
 
-## LangChain Callback
+`SessionBat` is the client entrypoint.
 
-The LangChain adapter maps LangChain callbacks onto the same completed
-observations. For chat models, it records rendered system and user messages
-before the assistant response.
+```python
+client = SessionBat(
+    app="support-bot",
+    api_key="optional",
+    endpoint="optional",
+)
+```
+
+Use `client.session(...)` to create a session and record observations against a
+stable `session_id`.
+
+### `Session`
+
+A `Session` records completed observations:
+
+- `session.user_message(content)`
+- `session.message(role=..., content=...)`
+- `session.assistant_response(...)`
+- `session.tool_call(...)`
+- `session.retrieval(...)`
+
+Each call returns the generated observation id.
+
+### `LangChainCallbackHandler`
+
+The LangChain adapter maps callback events onto the same observation model.
 
 ```python
 from sessionbat import SessionBat
@@ -117,29 +153,24 @@ result = chain.invoke(
 )
 ```
 
-It records:
-
-- rendered system and user chat messages as `message`
-- LLM/chat model calls as `assistant_response`
-- tools as `tool_call`
-- retrievers as `retrieval`
-
-Callback errors are attached to the operation that failed where possible;
-chain-level errors are not emitted as standalone events.
-
-By default, the adapter groups each LangChain invocation under the root
-LangChain run id. If your application already has a stable conversation id,
-pass it through LangChain metadata:
+If you already have a session object, you can attach the callback to it:
 
 ```python
-result = chain.invoke(
-    {"input": "I am locked out of my account"},
-    config={
-        "callbacks": [handler],
-        "metadata": {"session_id": "thread_123"},
-    },
-)
+handler = session.langchain_callback(tags=["langchain"])
 ```
+
+## Event model
+
+SessionBat keeps the shape intentionally small:
+
+- `tags` are lightweight labels for filtering and grouping.
+- `context` holds session-level or observation-level metadata.
+- `metadata` stores descriptive operation data such as model, provider, index,
+  or service name.
+- `metrics` stores numeric data such as latency, tokens, cost, or HTTP status.
+- `input` and `output` hold raw payloads.
+- `error` is attached to the failed operation instead of being emitted as a
+  separate event type.
 
 ## Development
 
@@ -149,8 +180,13 @@ uv run ruff check .
 uv run ruff format --check .
 ```
 
-## Design notes
+## Repository layout
 
-- Sessions are persistent identities, not bounded operations.
-- Observations are recorded as completed events in one call.
-- The public primitives are intentionally limited to concepts that should map directly from LangChain callbacks.
+- `src/sessionbat/client.py` contains the core recording API.
+- `src/sessionbat/langchain.py` contains the LangChain adapter.
+- `src/sessionbat/transports.py` defines the default stdout transport and the
+  in-memory test transport.
+
+## License
+
+MIT.
