@@ -4,13 +4,12 @@ from sessionbat import SessionBat
 def main() -> None:
     client = SessionBat(
         app="support-bot",
-        default_tags=["demo", "failure-mode"],
+        default_tags=["development", "support-bot"],
         default_context={"environment": "development"},
     )
 
     session = client.session(
         session_id="thread_model_error",
-        tags=["support"],
         context={
             "user_id": "user_404",
             "user_email": "user404@example.com",
@@ -34,7 +33,6 @@ def main() -> None:
         },
         metadata={"provider": "openai", "request_id": "req_123"},
         metrics={"latency_ms": 2150, "retry_count": 2},
-        tags=["openai"],
     )
 
     session.error(
@@ -43,7 +41,6 @@ def main() -> None:
         error_type="llm_request_failed",
         metadata={"provider": "openai", "customer_visible": True},
         metrics={"retry_count": 2},
-        tags=["incident"],
     )
 
 

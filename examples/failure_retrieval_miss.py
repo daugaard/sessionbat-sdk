@@ -4,13 +4,12 @@ from sessionbat import SessionBat
 def main() -> None:
     client = SessionBat(
         app="support-bot",
-        default_tags=["demo", "failure-mode"],
+        default_tags=["development", "support-bot"],
         default_context={"environment": "development"},
     )
 
     session = client.session(
         session_id="thread_retrieval_miss",
-        tags=["support"],
         context={
             "user_id": "user_222",
             "user_email": "user222@example.com",
@@ -30,7 +29,6 @@ def main() -> None:
             "top_k": 5,
         },
         metrics={"latency_ms": 63, "documents_found": 0},
-        tags=["knowledge-base"],
     )
 
     session.assistant_response(
@@ -44,18 +42,11 @@ def main() -> None:
             "text": "I could not find documentation for exporting audit logs for SSO users.",
         },
         metadata={"provider": "openai"},
-        metrics={
-            "latency_ms": 704,
-            "input_tokens": 118,
-            "output_tokens": 24,
-            "retrieval_documents_found": 0,
-        },
-        tags=["openai"],
+        metrics={"latency_ms": 704, "input_tokens": 118, "output_tokens": 24},
     )
     session.user_message(
         "Can an admin download SAML access logs anywhere?",
         metadata={"sequence": "follow_up"},
-        tags=["friction"],
     )
 
 

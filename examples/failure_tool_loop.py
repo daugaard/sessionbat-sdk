@@ -4,13 +4,12 @@ from sessionbat import SessionBat
 def main() -> None:
     client = SessionBat(
         app="support-bot",
-        default_tags=["demo", "failure-mode"],
+        default_tags=["development", "support-bot"],
         default_context={"environment": "development"},
     )
 
     session = client.session(
         session_id="thread_tool_loop",
-        tags=["support"],
         context={
             "user_id": "user_777",
             "user_email": "user777@example.com",
@@ -27,7 +26,6 @@ def main() -> None:
         output={"total_tokens": 192044, "cached": False},
         metadata={"service": "billing-service"},
         metrics={"latency_ms": 141, "http_status": 200, "attempt": 1},
-        tags=["internal-tool"],
     )
 
     session.tool_call(
@@ -36,7 +34,6 @@ def main() -> None:
         output={"total_tokens": 192044, "cached": False},
         metadata={"service": "billing-service"},
         metrics={"latency_ms": 136, "http_status": 200, "attempt": 2},
-        tags=["internal-tool"],
     )
 
     session.tool_call(
@@ -45,7 +42,6 @@ def main() -> None:
         output={"total_tokens": 192044, "cached": False},
         metadata={"service": "billing-service"},
         metrics={"latency_ms": 139, "http_status": 200, "attempt": 3},
-        tags=["internal-tool"],
     )
 
     session.assistant_response(
@@ -59,13 +55,7 @@ def main() -> None:
             "text": "I checked the usage totals again, but I still cannot determine the discrepancy.",
         },
         metadata={"provider": "openai"},
-        metrics={
-            "latency_ms": 1298,
-            "input_tokens": 203,
-            "output_tokens": 31,
-            "tool_call_count": 3,
-        },
-        tags=["openai"],
+        metrics={"latency_ms": 1298, "input_tokens": 203, "output_tokens": 31},
     )
 
 

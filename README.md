@@ -25,13 +25,12 @@ from sessionbat import SessionBat
 
 client = SessionBat(
     app="support-bot",
-    default_tags=["demo"],
+    default_tags=["development", "support-bot"],
     default_context={"environment": "development"},
 )
 
 session = client.session(
     session_id="thread_123",
-    tags=["support"],
     context={
         "user_id": "user_123",
         "user_email": "person@example.com",
@@ -53,7 +52,6 @@ session.retrieval(
     ],
     metadata={"index": "support_articles"},
     metrics={"latency_ms": 81, "documents_found": 1},
-    tags=["knowledge-base"],
 )
 
 session.tool_call(
@@ -69,7 +67,6 @@ session.assistant_response(
     request={"messages": [{"role": "user", "content": "I am locked out of my account"}]},
     response={"text": "I found your account. Use the reset link and follow the email prompt."},
     metrics={"latency_ms": 820, "input_tokens": 142, "output_tokens": 36},
-    tags=["openai"],
 )
 
 ```
@@ -84,7 +81,7 @@ The repository also includes a few pressure-test traces:
 
 ## Data shape
 
-- `tags` are lightweight labels for filtering and grouping.
+- `tags` are lightweight labels for stable filtering and grouping such as environment, app, or deployment.
 - `context` is user/account/application metadata attached to the whole session or a single observation.
 - `metadata` is descriptive operation data such as model, provider, index, or service name.
 - `metrics` is numeric operational data such as tokens, latency, cost, or HTTP status.
