@@ -24,12 +24,6 @@ Or with `pip`:
 pip install sessionbat
 ```
 
-For local development in this repository:
-
-```bash
-uv sync --dev
-```
-
 ## Quickstart
 
 ```python
