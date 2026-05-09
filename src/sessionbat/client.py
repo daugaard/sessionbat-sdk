@@ -216,7 +216,7 @@ class Session:
     ) -> str:
         observation_id = new_id()
         envelope = Envelope(
-            type="observation.recorded",
+            type=kind,
             tags=_merge_tags(self.tags, tags),
             context=_merge_dicts(self.context, context),
         )

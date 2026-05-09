@@ -118,6 +118,7 @@ class TestLangChainIntegration:
         event = self.transport.events[0]
         observation = event["observation"]
 
+        assert event["type"] == "tool"
         assert event["session_id"] == "thread_tool"
         assert event["tags"] == ["development", "langchain", "tool"]
         assert observation["kind"] == "tool"
@@ -161,6 +162,7 @@ class TestLangChainIntegration:
         llm_event = self.transport.events[2]
         llm_observation = llm_event["observation"]
 
+        assert system_event["type"] == "message"
         assert system_observation["kind"] == "message"
         assert system_observation["name"] == "system_message"
         assert system_observation["input"] == {"content": "You help users recover account access."}
@@ -168,6 +170,7 @@ class TestLangChainIntegration:
         assert system_observation["metadata"]["framework"] == "langchain"
         assert system_observation["metadata"]["tenant"] == "acme"
 
+        assert user_event["type"] == "message"
         assert user_observation["kind"] == "message"
         assert user_observation["name"] == "user_message"
         assert user_observation["input"] == {"content": "I am locked out"}
@@ -175,6 +178,7 @@ class TestLangChainIntegration:
         assert user_observation["metadata"]["framework"] == "langchain"
         assert user_observation["metadata"]["tenant"] == "acme"
 
+        assert llm_event["type"] == "llm"
         assert llm_observation["kind"] == "llm"
         assert llm_observation["name"] == "assistant_response"
         assert llm_observation["output"]["text"] == "Use the password reset link."
@@ -234,6 +238,7 @@ class TestLangChainIntegration:
         user_observation = self.transport.events[2]["observation"]
         llm_observation = self.transport.events[3]["observation"]
 
+        assert self.transport.events[0]["type"] == "retrieval"
         assert retrieval_observation["kind"] == "retrieval"
         assert retrieval_observation["input"] == {"query": "How do I reset my password?"}
         assert retrieval_observation["metrics"]["documents_found"] == 1

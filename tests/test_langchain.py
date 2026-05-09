@@ -76,6 +76,7 @@ class TestLangChainCallbackHandler:
         event = self.transport.events[0]
         observation = event["observation"]
 
+        assert event["type"] == "llm"
         assert event["session_id"] == "thread_123"
         assert event["tags"] == ["development", "support-bot", "langchain"]
         assert event["context"] == {"environment": "test", "user_id": "user_123"}
@@ -128,6 +129,8 @@ class TestLangChainCallbackHandler:
         success = self.transport.events[0]["observation"]
         failure = self.transport.events[1]["observation"]
 
+        assert self.transport.events[0]["type"] == "tool"
+        assert self.transport.events[1]["type"] == "tool"
         assert success["kind"] == "tool"
         assert success["name"] == "lookup_account"
         assert success["input"]["inputs"] == {"account_id": "acct_123"}
@@ -153,6 +156,8 @@ class TestLangChainCallbackHandler:
         success = self.transport.events[0]["observation"]
         failure = self.transport.events[1]["observation"]
 
+        assert self.transport.events[0]["type"] == "retrieval"
+        assert self.transport.events[1]["type"] == "retrieval"
         assert success["kind"] == "retrieval"
         assert success["input"] == {"query": "reset password"}
         assert success["output"]["documents"][0]["id"] == "doc_reset_password"
