@@ -1,6 +1,7 @@
 # SessionBat SDK
 
-SessionBat is an early SDK for capturing AI session activity before deciding how much framework-specific instrumentation we need.
+SessionBat is an early SDK for capturing AI session activity through manual
+observations and framework adapters.
 
 This repository currently focuses on a manual API built around completed observations that map cleanly onto common LangChain activity:
 
@@ -12,12 +13,19 @@ This repository currently focuses on a manual API built around completed observa
 Failures are attached to the operation that failed using its `error` payload,
 rather than emitted as a separate standalone event type.
 
-The current shape is intentionally simple so we can pressure-test the data model before building a LangChain adapter.
+The current shape is intentionally simple so we can pressure-test the data model
+while adding framework-specific adapters incrementally.
 
 ## Install
 
 ```bash
 uv sync
+```
+
+For development, install dev dependencies too:
+
+```bash
+uv sync --dev
 ```
 
 ## Example
@@ -93,7 +101,9 @@ The SDK emits raw structured payloads via a transport. The default transport pri
 
 ## LangChain Callback
 
-The LangChain adapter is optional and maps LangChain callbacks onto the same completed observations:
+The LangChain adapter maps LangChain callbacks onto the same completed
+observations. For chat models, it records rendered system and user messages
+before the assistant response.
 
 ```python
 from sessionbat import SessionBat
@@ -108,7 +118,23 @@ result = chain.invoke(
 )
 ```
 
-It records LLM/chat model calls as `assistant_response`, tools as `tool_call`, and retrievers as `retrieval`. Callback errors are attached to the operation that failed where possible; chain-level errors are not emitted as standalone events.
+It records:
+
+- rendered system and user chat messages as `message`
+- LLM/chat model calls as `assistant_response`
+- tools as `tool_call`
+- retrievers as `retrieval`
+
+Callback errors are attached to the operation that failed where possible;
+chain-level errors are not emitted as standalone events.
+
+## Development
+
+```bash
+uv run pytest
+uv run ruff check .
+uv run ruff format --check .
+```
 
 ## Design notes
 

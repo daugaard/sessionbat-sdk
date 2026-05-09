@@ -6,7 +6,6 @@ from typing import Any, Literal
 from .models import Envelope, isoformat, new_id, utc_now
 from .transports import StdoutTransport, Transport
 
-
 ObservationKind = Literal["message", "llm", "tool", "retrieval"]
 MessageRole = Literal["user", "assistant", "system", "tool"]
 
@@ -45,7 +44,7 @@ class SessionBat:
         session_id: str,
         tags: list[str] | None = None,
         context: dict[str, Any] | None = None,
-    ) -> "Session":
+    ) -> Session:
         return Session(
             client=self,
             session_id=session_id,

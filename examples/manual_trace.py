@@ -27,7 +27,10 @@ def main() -> None:
                 "id": "doc_reset_password",
                 "title": "Reset your password",
                 "score": 0.93,
-                "snippet": "Use the password reset link from the sign-in page to receive an email reset link.",
+                "snippet": (
+                    "Use the password reset link from the sign-in page to receive "
+                    "an email reset link."
+                ),
             }
         ],
         metadata={"index": "support_articles", "strategy": "semantic"},

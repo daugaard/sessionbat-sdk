@@ -103,6 +103,19 @@ class LangChainCallbackHandler(_BaseCallbackHandler):
         metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
+        callback_metadata = self._metadata(
+            run_id=run_id,
+            parent_run_id=parent_run_id,
+            serialized=serialized,
+            metadata=metadata,
+            extra={"langchain_callback": "on_chat_model_start", "chat_model": True},
+            kwargs=kwargs,
+        )
+        self._record_messages_from_chat_input(
+            messages,
+            metadata=callback_metadata,
+            tags=tags,
+        )
         self._runs[_run_id(run_id)] = _RunState(
             kind="llm",
             name=_serialized_name(serialized, "chat_model"),
@@ -111,14 +124,7 @@ class LangChainCallbackHandler(_BaseCallbackHandler):
                 "serialized": _jsonable(serialized),
                 "invocation_params": _jsonable(kwargs.get("invocation_params")),
             },
-            metadata=self._metadata(
-                run_id=run_id,
-                parent_run_id=parent_run_id,
-                serialized=serialized,
-                metadata=metadata,
-                extra={"langchain_callback": "on_chat_model_start", "chat_model": True},
-                kwargs=kwargs,
-            ),
+            metadata=callback_metadata,
             tags=self._tags(tags),
             parent_run_id=_optional_run_id(parent_run_id),
         )
@@ -454,6 +460,31 @@ class LangChainCallbackHandler(_BaseCallbackHandler):
     def _tags(self, *tag_sets: list[str] | None) -> list[str]:
         return _merge_tags(self.tags, *tag_sets)
 
+    def _record_messages_from_chat_input(
+        self,
+        message_batches: list[list[Any]],
+        *,
+        metadata: dict[str, Any],
+        tags: list[str] | None,
+    ) -> None:
+        for message in _system_and_user_messages(message_batches):
+            role = _message_role(message)
+            if role is None:
+                continue
+            self.session.message(
+                role=role,
+                content=_message_content(message),
+                metadata=_merge_dicts(
+                    metadata,
+                    {
+                        "langchain_message_type": _message_type(message),
+                        "langchain_message_id": getattr(message, "id", None),
+                    },
+                ),
+                tags=self._tags(tags),
+                context=self.context,
+            )
+
 
 SessionBatCallbackHandler = LangChainCallbackHandler
 
@@ -647,6 +678,45 @@ def _document_payload(document: Any) -> dict[str, Any]:
     if isinstance(document, Mapping):
         return {str(key): _jsonable(value) for key, value in document.items()}
     return {"content": _jsonable(document)}
+
+
+def _system_and_user_messages(message_batches: list[list[Any]]) -> list[Any]:
+    if not message_batches:
+        return []
+    messages = message_batches[-1]
+    return [message for message in messages if _message_role(message) in {"system", "user"}]
+
+
+def _message_role(message: Any) -> str | None:
+    message_type = _message_type(message)
+    if message_type in {"human", "user"}:
+        return "user"
+    if message_type == "system":
+        return "system"
+    return None
+
+
+def _message_type(message: Any) -> str | None:
+    message_type = getattr(message, "type", None)
+    if isinstance(message_type, str):
+        return message_type
+    role = getattr(message, "role", None)
+    if isinstance(role, str):
+        return role
+    if isinstance(message, Mapping):
+        value = message.get("type") or message.get("role")
+        if isinstance(value, str):
+            return value
+    return None
+
+
+def _message_content(message: Any) -> Any:
+    content = getattr(message, "content", None)
+    if content is not None:
+        return _jsonable(content)
+    if isinstance(message, Mapping) and "content" in message:
+        return _jsonable(message["content"])
+    return _jsonable(message)
 
 
 def _jsonable(value: Any, *, _depth: int = 0) -> Any:

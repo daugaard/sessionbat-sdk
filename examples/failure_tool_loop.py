@@ -52,7 +52,9 @@ def main() -> None:
             ]
         },
         response={
-            "text": "I checked the usage totals again, but I still cannot determine the discrepancy.",
+            "text": (
+                "I checked the usage totals again, but I still cannot determine the discrepancy."
+            ),
         },
         metadata={"provider": "openai"},
         metrics={"latency_ms": 1298, "input_tokens": 203, "output_tokens": 31},

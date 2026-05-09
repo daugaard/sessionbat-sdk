@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import unittest
 from uuid import uuid4
 
 from sessionbat import LangChainCallbackHandler, SessionBat, SessionBatCallbackHandler
@@ -33,8 +32,8 @@ class _Document:
         self.metadata = {"score": 0.93, "title": "Reset your password"}
 
 
-class LangChainCallbackHandlerTest(unittest.TestCase):
-    def setUp(self) -> None:
+class TestLangChainCallbackHandler:
+    def setup_method(self) -> None:
         self.transport = MemoryTransport()
         self.client = SessionBat(
             transport=self.transport,
@@ -50,8 +49,8 @@ class LangChainCallbackHandlerTest(unittest.TestCase):
     def test_convenience_constructor_and_export_alias(self) -> None:
         handler = self.session.langchain_callback(tags=["langchain"])
 
-        self.assertIsInstance(handler, LangChainCallbackHandler)
-        self.assertIs(SessionBatCallbackHandler, LangChainCallbackHandler)
+        assert isinstance(handler, LangChainCallbackHandler)
+        assert SessionBatCallbackHandler is LangChainCallbackHandler
 
     def test_records_llm_completion_as_assistant_response(self) -> None:
         handler = self.session.langchain_callback(
@@ -72,21 +71,21 @@ class LangChainCallbackHandlerTest(unittest.TestCase):
         event = self.transport.events[0]
         observation = event["observation"]
 
-        self.assertEqual(event["session_id"], "thread_123")
-        self.assertEqual(event["tags"], ["development", "support-bot", "langchain"])
-        self.assertEqual(event["context"], {"environment": "test", "user_id": "user_123"})
-        self.assertEqual(observation["kind"], "llm")
-        self.assertEqual(observation["name"], "assistant_response")
-        self.assertEqual(observation["input"]["prompts"], ["I am locked out"])
-        self.assertEqual(observation["output"]["text"], "Use the reset link.")
-        self.assertEqual(observation["metadata"]["framework"], "langchain")
-        self.assertEqual(observation["metadata"]["model"], "gpt-test")
-        self.assertEqual(observation["metadata"]["tenant"], "acme")
-        self.assertEqual(observation["metadata"]["langchain_run_id"], str(run_id))
-        self.assertEqual(observation["metrics"]["input_tokens"], 42)
-        self.assertEqual(observation["metrics"]["output_tokens"], 7)
-        self.assertEqual(observation["metrics"]["total_tokens"], 49)
-        self.assertIn("latency_ms", observation["metrics"])
+        assert event["session_id"] == "thread_123"
+        assert event["tags"] == ["development", "support-bot", "langchain"]
+        assert event["context"] == {"environment": "test", "user_id": "user_123"}
+        assert observation["kind"] == "llm"
+        assert observation["name"] == "assistant_response"
+        assert observation["input"]["prompts"] == ["I am locked out"]
+        assert observation["output"]["text"] == "Use the reset link."
+        assert observation["metadata"]["framework"] == "langchain"
+        assert observation["metadata"]["model"] == "gpt-test"
+        assert observation["metadata"]["tenant"] == "acme"
+        assert observation["metadata"]["langchain_run_id"] == str(run_id)
+        assert observation["metrics"]["input_tokens"] == 42
+        assert observation["metrics"]["output_tokens"] == 7
+        assert observation["metrics"]["total_tokens"] == 49
+        assert "latency_ms" in observation["metrics"]
         json.dumps(event)
 
     def test_records_llm_error_as_failed_assistant_response(self) -> None:
@@ -102,9 +101,9 @@ class LangChainCallbackHandlerTest(unittest.TestCase):
 
         observation = self.transport.events[0]["observation"]
 
-        self.assertEqual(observation["kind"], "llm")
-        self.assertEqual(observation["metadata"]["model_name"], "gpt-test")
-        self.assertEqual(observation["error"], {"type": "RuntimeError", "message": "upstream failed"})
+        assert observation["kind"] == "llm"
+        assert observation["metadata"]["model_name"] == "gpt-test"
+        assert observation["error"] == {"type": "RuntimeError", "message": "upstream failed"}
 
     def test_records_tool_completion_and_error(self) -> None:
         handler = self.session.langchain_callback()
@@ -124,20 +123,24 @@ class LangChainCallbackHandlerTest(unittest.TestCase):
         success = self.transport.events[0]["observation"]
         failure = self.transport.events[1]["observation"]
 
-        self.assertEqual(success["kind"], "tool")
-        self.assertEqual(success["name"], "lookup_account")
-        self.assertEqual(success["input"]["inputs"], {"account_id": "acct_123"})
-        self.assertEqual(success["output"], {"status": "locked"})
-        self.assertEqual(failure["kind"], "tool")
-        self.assertEqual(failure["name"], "send_email")
-        self.assertEqual(failure["error"], {"type": "ValueError", "message": "missing template"})
+        assert success["kind"] == "tool"
+        assert success["name"] == "lookup_account"
+        assert success["input"]["inputs"] == {"account_id": "acct_123"}
+        assert success["output"] == {"status": "locked"}
+        assert failure["kind"] == "tool"
+        assert failure["name"] == "send_email"
+        assert failure["error"] == {"type": "ValueError", "message": "missing template"}
 
     def test_records_retrieval_completion_and_error(self) -> None:
         handler = self.session.langchain_callback()
         success_run_id = uuid4()
         error_run_id = uuid4()
 
-        handler.on_retriever_start({"name": "support_articles"}, "reset password", run_id=success_run_id)
+        handler.on_retriever_start(
+            {"name": "support_articles"},
+            "reset password",
+            run_id=success_run_id,
+        )
         handler.on_retriever_end([_Document()], run_id=success_run_id)
         handler.on_retriever_start({"name": "support_articles"}, "billing", run_id=error_run_id)
         handler.on_retriever_error(RuntimeError("index unavailable"), run_id=error_run_id)
@@ -145,14 +148,14 @@ class LangChainCallbackHandlerTest(unittest.TestCase):
         success = self.transport.events[0]["observation"]
         failure = self.transport.events[1]["observation"]
 
-        self.assertEqual(success["kind"], "retrieval")
-        self.assertEqual(success["input"], {"query": "reset password"})
-        self.assertEqual(success["output"]["documents"][0]["id"], "doc_reset_password")
-        self.assertEqual(success["output"]["documents"][0]["metadata"]["score"], 0.93)
-        self.assertEqual(success["metrics"]["documents_found"], 1)
-        self.assertEqual(failure["kind"], "retrieval")
-        self.assertEqual(failure["input"], {"query": "billing"})
-        self.assertEqual(failure["error"], {"type": "RuntimeError", "message": "index unavailable"})
+        assert success["kind"] == "retrieval"
+        assert success["input"] == {"query": "reset password"}
+        assert success["output"]["documents"][0]["id"] == "doc_reset_password"
+        assert success["output"]["documents"][0]["metadata"]["score"] == 0.93
+        assert success["metrics"]["documents_found"] == 1
+        assert failure["kind"] == "retrieval"
+        assert failure["input"] == {"query": "billing"}
+        assert failure["error"] == {"type": "RuntimeError", "message": "index unavailable"}
 
     def test_ignores_chain_errors(self) -> None:
         handler = self.session.langchain_callback()
@@ -160,8 +163,4 @@ class LangChainCallbackHandlerTest(unittest.TestCase):
 
         handler.on_chain_error(RuntimeError("chain failed"), run_id=run_id)
 
-        self.assertEqual(self.transport.events, [])
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert self.transport.events == []

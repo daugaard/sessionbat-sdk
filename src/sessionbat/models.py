@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import uuid4
 
-
 SpanKind = Literal["llm", "tool", "retrieval", "chain", "custom"]
 EventLevel = Literal["debug", "info", "warning", "error"]
 

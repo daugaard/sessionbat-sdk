@@ -6,8 +6,7 @@ from typing import Protocol
 
 
 class Transport(Protocol):
-    def send(self, payload: dict) -> None:
-        ...
+    def send(self, payload: dict) -> None: ...
 
 
 class StdoutTransport:
