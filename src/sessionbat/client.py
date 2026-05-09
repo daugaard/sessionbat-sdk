@@ -7,7 +7,7 @@ from .models import Envelope, isoformat, new_id, utc_now
 from .transports import StdoutTransport, Transport
 
 
-ObservationKind = Literal["message", "llm", "tool", "retrieval", "error", "custom"]
+ObservationKind = Literal["message", "llm", "tool", "retrieval", "error"]
 MessageRole = Literal["user", "assistant", "system", "tool"]
 
 
@@ -185,30 +185,6 @@ class Session:
             kind="error",
             name=name,
             error={"type": error_type, "message": message},
-            metadata=metadata,
-            metrics=metrics,
-            tags=tags,
-            context=context,
-        )
-
-    def event(
-        self,
-        *,
-        name: str,
-        input: dict[str, Any] | None = None,
-        output: dict[str, Any] | None = None,
-        error: dict[str, Any] | None = None,
-        metadata: dict[str, Any] | None = None,
-        metrics: dict[str, Any] | None = None,
-        tags: list[str] | None = None,
-        context: dict[str, Any] | None = None,
-    ) -> str:
-        return self._record(
-            kind="custom",
-            name=name,
-            input=input,
-            output=output,
-            error=error,
             metadata=metadata,
             metrics=metrics,
             tags=tags,

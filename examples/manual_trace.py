@@ -23,9 +23,16 @@ def main() -> None:
 
     session.retrieval(
         query="reset password locked out",
-        documents=[],
+        documents=[
+            {
+                "id": "doc_reset_password",
+                "title": "Reset your password",
+                "score": 0.93,
+                "snippet": "Use the password reset link from the sign-in page to receive an email reset link.",
+            }
+        ],
         metadata={"index": "support_articles", "strategy": "semantic"},
-        metrics={"latency_ms": 81, "documents_found": 0},
+        metrics={"latency_ms": 81, "documents_found": 1},
         tags=["knowledge-base"],
     )
 
