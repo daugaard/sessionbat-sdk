@@ -73,6 +73,16 @@ class SessionBat:
         assert self.transport is not None
         self.transport.send(payload)
 
+    def flush(self, timeout: float | None = None) -> bool:
+        if self.transport is None or not hasattr(self.transport, "flush"):
+            return True
+        return bool(self.transport.flush(timeout=timeout))
+
+    def close(self, timeout: float | None = None) -> bool:
+        if self.transport is None or not hasattr(self.transport, "close"):
+            return True
+        return bool(self.transport.close(timeout=timeout))
+
     def langchain_callback(
         self,
         *,

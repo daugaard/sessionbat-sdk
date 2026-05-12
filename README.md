@@ -117,6 +117,12 @@ The SDK sends events to SessionBat ingestion by default. Pass `api_key` directly
 or set `SESSIONBAT_API_KEY`. For tests or local debugging, pass an explicit
 transport such as `MemoryTransport` or `StdoutTransport`.
 
+HTTP ingestion runs in a background thread so recording observations does not
+block your application on network I/O. Transient failures are retried with
+bounded backoff, and queued events are flushed automatically during interpreter
+shutdown. Call `client.flush()` or `client.close()` when you need to wait for
+delivery before exiting a short-lived process.
+
 ### `Session`
 
 A `Session` records completed observations:
