@@ -7,7 +7,7 @@ from typing import Protocol
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-DEFAULT_INGESTION_ENDPOINT = "http://ingest.sessionbat.com:3000/api/v1/ingestion/events"
+DEFAULT_INGESTION_ENDPOINT = "https://ingest.sessionbat.com/api/v1/ingestion/events"
 
 
 class Transport(Protocol):

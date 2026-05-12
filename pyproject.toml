@@ -1,11 +1,46 @@
 [project]
 name = "sessionbat"
 version = "0.1.0"
-description = "Manual tracing primitives for AI sessions."
+description = "Python SDK for recording and monitoring AI session activity."
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
+authors = [{ name = "Søren Blond Daugaard" }]
+maintainers = [{ name = "Søren Blond Daugaard" }]
+keywords = [
+    "ai",
+    "agents",
+    "llm",
+    "observability",
+    "monitoring",
+    "tracing",
+    "langchain",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Monitoring",
+    "Typing :: Typed",
+]
 dependencies = []
+
+[project.optional-dependencies]
+langchain = ["langchain>=1.2.18"]
+
+[project.urls]
+Homepage = "https://github.com/daugaard/sessionbat-sdk"
+Repository = "https://github.com/daugaard/sessionbat-sdk"
+Issues = "https://github.com/daugaard/sessionbat-sdk/issues"
 
 [build-system]
 requires = ["hatchling"]
@@ -16,6 +51,15 @@ package = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/sessionbat"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "LICENSE",
+    "README.md",
+    "pyproject.toml",
+    "src/sessionbat",
+    "tests",
+]
 
 [dependency-groups]
 dev = [

@@ -717,6 +717,11 @@ name = "sessionbat"
 version = "0.1.0"
 source = { editable = "." }
 
+[package.optional-dependencies]
+langchain = [
+    { name = "langchain" },
+]
+
 [package.dev-dependencies]
 dev = [
     { name = "langchain" },
@@ -725,6 +730,8 @@ dev = [
 ]
 
 [package.metadata]
+requires-dist = [{ name = "langchain", marker = "extra == 'langchain'", specifier = ">=1.2.18" }]
+provides-extras = ["langchain"]
 
 [package.metadata.requires-dev]
 dev = [

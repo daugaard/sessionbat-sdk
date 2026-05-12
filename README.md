@@ -106,7 +106,7 @@ from sessionbat import SessionBat, Session, LangChainCallbackHandler
 client = SessionBat(
     app="support-bot",
     api_key="sbat_ingest_...",
-    endpoint="http://ingest.sessionbat.com:3000/api/v1/ingestion/events",
+    endpoint="https://ingest.sessionbat.com/api/v1/ingestion/events",
 )
 ```
 
