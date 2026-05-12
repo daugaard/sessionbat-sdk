@@ -1,8 +1,10 @@
 from sessionbat import SessionBat
+from sessionbat.transports import StdoutTransport
 
 
 def main() -> None:
     client = SessionBat(
+        transport=StdoutTransport(),
         app="support-bot",
         default_tags=["development", "support-bot"],
         default_context={"environment": "development"},

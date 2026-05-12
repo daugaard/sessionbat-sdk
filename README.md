@@ -30,6 +30,7 @@ pip install sessionbat
 from sessionbat import SessionBat
 
 client = SessionBat(
+    api_key="sbat_ingest_...",
     app="support-bot",
     default_tags=["production"],
     default_context={"environment": "prod"},
@@ -104,13 +105,17 @@ from sessionbat import SessionBat, Session, LangChainCallbackHandler
 ```python
 client = SessionBat(
     app="support-bot",
-    api_key="optional",
-    endpoint="optional",
+    api_key="sbat_ingest_...",
+    endpoint="http://ingest.sessionbat.com:3000/api/v1/ingestion/events",
 )
 ```
 
 Use `client.session(...)` to create a session and record observations against a
 stable `session_id`.
+
+The SDK sends events to SessionBat ingestion by default. Pass `api_key` directly
+or set `SESSIONBAT_API_KEY`. For tests or local debugging, pass an explicit
+transport such as `MemoryTransport` or `StdoutTransport`.
 
 ### `Session`
 
@@ -131,7 +136,7 @@ The LangChain adapter maps callback events onto the same observation model.
 ```python
 from sessionbat import SessionBat
 
-client = SessionBat(app="support-bot")
+client = SessionBat(app="support-bot", api_key="sbat_ingest_...")
 handler = client.langchain_callback(tags=["langchain"])
 
 result = chain.invoke(
@@ -171,8 +176,8 @@ uv run ruff format --check .
 
 - `src/sessionbat/client.py` contains the core recording API.
 - `src/sessionbat/langchain.py` contains the LangChain adapter.
-- `src/sessionbat/transports.py` defines the default stdout transport and the
-  in-memory test transport.
+- `src/sessionbat/transports.py` defines the ingestion transport plus stdout
+  and in-memory transports for debugging and tests.
 
 ## License
 

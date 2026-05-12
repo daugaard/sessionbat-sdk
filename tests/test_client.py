@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import json
+import threading
+from collections.abc import Iterator
 from datetime import datetime
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+import pytest
 
 from sessionbat import SessionBat
-from sessionbat.transports import MemoryTransport
+from sessionbat.transports import IngestionTransport, MemoryTransport, TransportError
 
 
 class TestSessionBatClient:
@@ -122,3 +127,110 @@ class TestSessionBatClient:
             "type": "TimeoutError",
             "message": "email service timed out",
         }
+
+
+class _RecordingHandler(BaseHTTPRequestHandler):
+    requests: list[dict] = []
+    response_status = 202
+
+    def do_POST(self) -> None:
+        length = int(self.headers["Content-Length"])
+        body = self.rfile.read(length)
+        self.__class__.requests.append(
+            {
+                "path": self.path,
+                "headers": self.headers,
+                "body": json.loads(body),
+            }
+        )
+        self.send_response(self.__class__.response_status)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(b'{"ok":true}')
+
+    def log_message(self, format: str, *args: object) -> None:
+        pass
+
+
+@pytest.fixture
+def ingestion_server() -> Iterator[str]:
+    _RecordingHandler.requests = []
+    _RecordingHandler.response_status = 202
+    server = HTTPServer(("127.0.0.1", 0), _RecordingHandler)
+    thread = threading.Thread(target=server.serve_forever)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}/api/v1/ingestion/events"
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
+
+
+class TestIngestionTransport:
+    def test_default_client_requires_api_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("SESSIONBAT_API_KEY", raising=False)
+
+        with pytest.raises(ValueError, match="requires api_key"):
+            SessionBat()
+
+    def test_explicit_memory_transport_does_not_require_api_key(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("SESSIONBAT_API_KEY", raising=False)
+        transport = MemoryTransport()
+
+        client = SessionBat(transport=transport)
+
+        assert client.transport is transport
+
+    def test_uses_environment_api_key(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        ingestion_server: str,
+    ) -> None:
+        monkeypatch.setenv("SESSIONBAT_API_KEY", "sbat_ingest_env")
+
+        client = SessionBat(endpoint=ingestion_server)
+        session = client.session(session_id="thread_123")
+        session.tool_call(tool_name="lookup_account", input={"account_id": "acct_123"})
+
+        request = _RecordingHandler.requests[0]
+        assert request["headers"]["Authorization"] == "Bearer sbat_ingest_env"
+
+    def test_posts_sdk_payload_with_bearer_auth(self, ingestion_server: str) -> None:
+        client = SessionBat(api_key="sbat_ingest_test", endpoint=ingestion_server)
+        session = client.session(
+            session_id="thread_123",
+            tags=["support"],
+            context={"user_id": "user_123"},
+        )
+
+        observation_id = session.tool_call(
+            tool_name="lookup_account",
+            input={"account_id": "acct_123"},
+            output={"status": "locked"},
+        )
+
+        request = _RecordingHandler.requests[0]
+        payload = request["body"]
+        assert request["path"] == "/api/v1/ingestion/events"
+        assert request["headers"]["Accept"] == "application/json"
+        assert request["headers"]["Authorization"] == "Bearer sbat_ingest_test"
+        assert request["headers"]["Content-Type"] == "application/json"
+        assert payload["id"] == observation_id
+        assert payload["type"] == "tool"
+        assert payload["session_id"] == "thread_123"
+        assert payload["tags"] == ["support"]
+        assert payload["context"] == {"user_id": "user_123"}
+        assert payload["observation"]["kind"] == "tool"
+        assert payload["observation"]["name"] == "lookup_account"
+        assert payload["observation"]["input"] == {"account_id": "acct_123"}
+        assert payload["observation"]["output"] == {"status": "locked"}
+
+    def test_raises_transport_error_for_non_2xx_response(self, ingestion_server: str) -> None:
+        _RecordingHandler.response_status = 500
+        transport = IngestionTransport(api_key="sbat_ingest_test", endpoint=ingestion_server)
+
+        with pytest.raises(TransportError, match="HTTP 500"):
+            transport.send({"id": "evt_123"})

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from .models import Envelope, isoformat, new_id, utc_now
-from .transports import StdoutTransport, Transport
+from .transports import DEFAULT_INGESTION_ENDPOINT, IngestionTransport, Transport
 
 ObservationKind = Literal["message", "llm", "tool", "retrieval"]
 MessageRole = Literal["user", "assistant", "system", "tool"]
@@ -31,12 +32,28 @@ def _merge_dicts(*values: dict[str, Any] | None) -> dict[str, Any]:
 
 @dataclass(slots=True)
 class SessionBat:
-    transport: Transport = field(default_factory=StdoutTransport)
+    transport: Transport | None = None
     api_key: str | None = None
     endpoint: str | None = None
     app: str | None = None
     default_tags: list[str] = field(default_factory=list)
     default_context: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self.transport is not None:
+            return
+
+        api_key = self.api_key or os.environ.get("SESSIONBAT_API_KEY")
+        if not api_key:
+            raise ValueError(
+                "SessionBat requires api_key or SESSIONBAT_API_KEY for ingestion. "
+                "Pass an explicit transport for tests or local debugging."
+            )
+
+        self.transport = IngestionTransport(
+            api_key=api_key,
+            endpoint=self.endpoint or DEFAULT_INGESTION_ENDPOINT,
+        )
 
     def session(
         self,
@@ -53,6 +70,7 @@ class SessionBat:
         )
 
     def _send(self, payload: dict[str, Any]) -> None:
+        assert self.transport is not None
         self.transport.send(payload)
 
     def langchain_callback(
