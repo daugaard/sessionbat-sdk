@@ -6,6 +6,7 @@ import time
 from collections.abc import Iterator
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from queue import Queue
 
 import pytest
 
@@ -277,6 +278,79 @@ class TestIngestionTransport:
         transport.send({"id": "evt_123"})
 
         assert transport.flush(timeout=1.0)
+
+    def test_unexpected_send_failure_does_not_stop_worker(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        sent: list[str] = []
+
+        def send_once(self: IngestionTransport, payload: dict) -> None:
+            if payload["id"] == "evt_bad":
+                raise TypeError("not JSON serializable")
+            sent.append(payload["id"])
+
+        monkeypatch.setattr(IngestionTransport, "_send_once", send_once)
+        transport = IngestionTransport(api_key="sbat_ingest_test")
+
+        transport.send({"id": "evt_bad"})
+        transport.send({"id": "evt_good"})
+
+        assert transport.flush(timeout=1.0)
+        assert sent == ["evt_good"]
+        assert transport.close(timeout=1.0)
+
+    def test_close_waits_for_event_accepted_during_send(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        sent: list[str] = []
+
+        class BlockingPutQueue:
+            def __init__(self) -> None:
+                self.inner: Queue[dict] = Queue()
+                self.put_started = threading.Event()
+                self.release_put = threading.Event()
+
+            @property
+            def unfinished_tasks(self) -> int:
+                return self.inner.unfinished_tasks
+
+            def put_nowait(self, payload: dict) -> None:
+                self.put_started.set()
+                self.release_put.wait(timeout=1.0)
+                self.inner.put_nowait(payload)
+
+            def get(self, timeout: float) -> dict:
+                return self.inner.get(timeout=timeout)
+
+            def task_done(self) -> None:
+                self.inner.task_done()
+
+        def send_once(self: IngestionTransport, payload: dict) -> None:
+            sent.append(payload["id"])
+
+        monkeypatch.setattr(IngestionTransport, "_send_once", send_once)
+        transport = IngestionTransport(api_key="sbat_ingest_test")
+        queue = BlockingPutQueue()
+        transport._queue = queue
+        close_result: list[bool] = []
+
+        send_thread = threading.Thread(target=transport.send, args=({"id": "evt_123"},))
+        send_thread.start()
+        assert queue.put_started.wait(timeout=1.0)
+
+        close_thread = threading.Thread(
+            target=lambda: close_result.append(transport.close(timeout=1.0))
+        )
+        close_thread.start()
+        time.sleep(0.05)
+
+        assert close_thread.is_alive()
+        queue.release_put.set()
+        send_thread.join(timeout=1.0)
+        close_thread.join(timeout=1.0)
+
+        assert close_result == [True]
+        assert sent == ["evt_123"]
 
     def test_full_queue_drops_newest_without_blocking(
         self, monkeypatch: pytest.MonkeyPatch

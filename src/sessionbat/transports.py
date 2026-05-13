@@ -48,10 +48,10 @@ class IngestionTransport:
                 return
             self._ensure_worker_started()
 
-        try:
-            self._queue.put_nowait(payload)
-        except Full:
-            return
+            try:
+                self._queue.put_nowait(payload)
+            except Full:
+                return
 
     def flush(self, timeout: float | None = None) -> bool:
         deadline = None if timeout is None else time.monotonic() + timeout
@@ -108,6 +108,8 @@ class IngestionTransport:
                     return
                 time.sleep(_backoff(attempt, self.base_backoff, self.max_backoff))
                 attempt += 1
+            except Exception:
+                return
 
     def _send_once(self, payload: dict) -> None:
         body = json.dumps(payload).encode("utf-8")
