@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from collections.abc import Iterator
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from queue import Queue
 
 import pytest
 
 from sessionbat import SessionBat
-from sessionbat.transports import IngestionTransport, MemoryTransport, TransportError
+from sessionbat.transports import IngestionTransport, MemoryTransport
 
 
 class TestSessionBatClient:
@@ -131,11 +133,16 @@ class TestSessionBatClient:
 
 class _RecordingHandler(BaseHTTPRequestHandler):
     requests: list[dict] = []
-    response_status = 202
+    response_status: int | list[int] = 202
 
     def do_POST(self) -> None:
         length = int(self.headers["Content-Length"])
         body = self.rfile.read(length)
+        response_status = self.__class__.response_status
+        if isinstance(response_status, list):
+            status = response_status.pop(0) if response_status else 202
+        else:
+            status = response_status
         self.__class__.requests.append(
             {
                 "path": self.path,
@@ -143,7 +150,7 @@ class _RecordingHandler(BaseHTTPRequestHandler):
                 "body": json.loads(body),
             }
         )
-        self.send_response(self.__class__.response_status)
+        self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
         self.wfile.write(b'{"ok":true}')
@@ -195,6 +202,7 @@ class TestIngestionTransport:
         session = client.session(session_id="thread_123")
         session.tool_call(tool_name="lookup_account", input={"account_id": "acct_123"})
 
+        assert client.flush(timeout=1.0)
         request = _RecordingHandler.requests[0]
         assert request["headers"]["Authorization"] == "Bearer sbat_ingest_env"
 
@@ -212,6 +220,7 @@ class TestIngestionTransport:
             output={"status": "locked"},
         )
 
+        assert client.flush(timeout=1.0)
         request = _RecordingHandler.requests[0]
         payload = request["body"]
         assert request["path"] == "/api/v1/ingestion/events"
@@ -228,9 +237,160 @@ class TestIngestionTransport:
         assert payload["observation"]["input"] == {"account_id": "acct_123"}
         assert payload["observation"]["output"] == {"status": "locked"}
 
-    def test_raises_transport_error_for_non_2xx_response(self, ingestion_server: str) -> None:
-        _RecordingHandler.response_status = 500
+    def test_retries_transient_http_failures(self, ingestion_server: str) -> None:
+        _RecordingHandler.response_status = [500, 500, 202]
+        transport = IngestionTransport(
+            api_key="sbat_ingest_test",
+            endpoint=ingestion_server,
+            base_backoff=0,
+            max_backoff=0,
+        )
+
+        transport.send({"id": "evt_123"})
+
+        assert transport.flush(timeout=1.0)
+        assert [request["body"]["id"] for request in _RecordingHandler.requests] == [
+            "evt_123",
+            "evt_123",
+            "evt_123",
+        ]
+
+    def test_does_not_retry_or_raise_for_non_retryable_http_failures(
+        self, ingestion_server: str
+    ) -> None:
+        _RecordingHandler.response_status = 400
         transport = IngestionTransport(api_key="sbat_ingest_test", endpoint=ingestion_server)
 
-        with pytest.raises(TransportError, match="HTTP 500"):
-            transport.send({"id": "evt_123"})
+        transport.send({"id": "evt_123"})
+
+        assert transport.flush(timeout=1.0)
+        assert len(_RecordingHandler.requests) == 1
+
+    def test_send_does_not_raise_for_network_failures(self) -> None:
+        transport = IngestionTransport(
+            api_key="sbat_ingest_test",
+            endpoint="http://127.0.0.1:1/api/v1/ingestion/events",
+            base_backoff=0,
+            max_backoff=0,
+            timeout=0.01,
+        )
+
+        transport.send({"id": "evt_123"})
+
+        assert transport.flush(timeout=1.0)
+
+    def test_unexpected_send_failure_does_not_stop_worker(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        sent: list[str] = []
+
+        def send_once(self: IngestionTransport, payload: dict) -> None:
+            if payload["id"] == "evt_bad":
+                raise TypeError("not JSON serializable")
+            sent.append(payload["id"])
+
+        monkeypatch.setattr(IngestionTransport, "_send_once", send_once)
+        transport = IngestionTransport(api_key="sbat_ingest_test")
+
+        transport.send({"id": "evt_bad"})
+        transport.send({"id": "evt_good"})
+
+        assert transport.flush(timeout=1.0)
+        assert sent == ["evt_good"]
+        assert transport.close(timeout=1.0)
+
+    def test_close_waits_for_event_accepted_during_send(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        sent: list[str] = []
+
+        class BlockingPutQueue:
+            def __init__(self) -> None:
+                self.inner: Queue[dict] = Queue()
+                self.put_started = threading.Event()
+                self.release_put = threading.Event()
+
+            @property
+            def unfinished_tasks(self) -> int:
+                return self.inner.unfinished_tasks
+
+            def put_nowait(self, payload: dict) -> None:
+                self.put_started.set()
+                self.release_put.wait(timeout=1.0)
+                self.inner.put_nowait(payload)
+
+            def get(self, timeout: float) -> dict:
+                return self.inner.get(timeout=timeout)
+
+            def task_done(self) -> None:
+                self.inner.task_done()
+
+        def send_once(self: IngestionTransport, payload: dict) -> None:
+            sent.append(payload["id"])
+
+        monkeypatch.setattr(IngestionTransport, "_send_once", send_once)
+        transport = IngestionTransport(api_key="sbat_ingest_test")
+        queue = BlockingPutQueue()
+        transport._queue = queue
+        close_result: list[bool] = []
+
+        send_thread = threading.Thread(target=transport.send, args=({"id": "evt_123"},))
+        send_thread.start()
+        assert queue.put_started.wait(timeout=1.0)
+
+        close_thread = threading.Thread(
+            target=lambda: close_result.append(transport.close(timeout=1.0))
+        )
+        close_thread.start()
+        time.sleep(0.05)
+
+        assert close_thread.is_alive()
+        queue.release_put.set()
+        send_thread.join(timeout=1.0)
+        close_thread.join(timeout=1.0)
+
+        assert close_result == [True]
+        assert sent == ["evt_123"]
+
+    def test_full_queue_drops_newest_without_blocking(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        started = threading.Event()
+        release = threading.Event()
+        sent: list[str] = []
+
+        def slow_send_once(self: IngestionTransport, payload: dict) -> None:
+            sent.append(payload["id"])
+            started.set()
+            release.wait(timeout=1.0)
+
+        monkeypatch.setattr(IngestionTransport, "_send_once", slow_send_once)
+        transport = IngestionTransport(api_key="sbat_ingest_test", queue_size=1)
+
+        transport.send({"id": "evt_1"})
+        assert started.wait(timeout=1.0)
+        transport.send({"id": "evt_2"})
+        start = time.monotonic()
+        transport.send({"id": "evt_3"})
+
+        assert time.monotonic() - start < 0.1
+        release.set()
+        assert transport.close(timeout=1.0)
+        assert sent == ["evt_1", "evt_2"]
+
+    def test_flush_returns_false_when_timeout_expires(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        release = threading.Event()
+
+        def slow_send_once(self: IngestionTransport, payload: dict) -> None:
+            release.wait(timeout=1.0)
+
+        monkeypatch.setattr(IngestionTransport, "_send_once", slow_send_once)
+        transport = IngestionTransport(api_key="sbat_ingest_test")
+
+        transport.send({"id": "evt_123"})
+
+        assert transport.flush(timeout=0.01) is False
+        release.set()
+        assert transport.close(timeout=1.0)
