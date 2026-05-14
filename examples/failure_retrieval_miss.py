@@ -19,10 +19,11 @@ def main() -> None:
             "plan": "pro",
         },
     )
+    run = session.run(run_id="run_retrieval_miss")
 
-    session.user_message("How do I export audit logs for SSO users?")
+    run.user_message("How do I export audit logs for SSO users?")
 
-    session.retrieval(
+    run.retrieval(
         query="export audit logs for sso users",
         documents=[],
         metadata={
@@ -33,7 +34,7 @@ def main() -> None:
         metrics={"latency_ms": 63, "documents_found": 0},
     )
 
-    session.assistant_response(
+    run.assistant_response(
         model="gpt-5.4-mini",
         request={
             "messages": [
@@ -46,7 +47,7 @@ def main() -> None:
         metadata={"provider": "openai"},
         metrics={"latency_ms": 704, "input_tokens": 118, "output_tokens": 24},
     )
-    session.user_message(
+    run.user_message(
         "Can an admin download SAML access logs anywhere?",
         metadata={"sequence": "follow_up"},
     )

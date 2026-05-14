@@ -19,10 +19,11 @@ def main() -> None:
             "plan": "starter",
         },
     )
+    run = session.run(run_id="run_model_error")
 
-    session.user_message("What invoices are overdue for Acme Corp?")
+    run.user_message("What invoices are overdue for Acme Corp?")
 
-    session.assistant_response(
+    run.assistant_response(
         model="gpt-5.4-mini",
         request={
             "messages": [

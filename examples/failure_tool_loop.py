@@ -19,10 +19,11 @@ def main() -> None:
             "plan": "enterprise",
         },
     )
+    run = session.run(run_id="run_tool_loop")
 
-    session.user_message("Why is my workspace usage total wrong?")
+    run.user_message("Why is my workspace usage total wrong?")
 
-    session.tool_call(
+    run.tool_call(
         tool_name="get_workspace_usage",
         input={"workspace_id": "ws_999"},
         output={"total_tokens": 192044, "cached": False},
@@ -30,7 +31,7 @@ def main() -> None:
         metrics={"latency_ms": 141, "http_status": 200, "attempt": 1},
     )
 
-    session.tool_call(
+    run.tool_call(
         tool_name="get_workspace_usage",
         input={"workspace_id": "ws_999"},
         output={"total_tokens": 192044, "cached": False},
@@ -38,7 +39,7 @@ def main() -> None:
         metrics={"latency_ms": 136, "http_status": 200, "attempt": 2},
     )
 
-    session.tool_call(
+    run.tool_call(
         tool_name="get_workspace_usage",
         input={"workspace_id": "ws_999"},
         output={"total_tokens": 192044, "cached": False},
@@ -46,7 +47,7 @@ def main() -> None:
         metrics={"latency_ms": 139, "http_status": 200, "attempt": 3},
     )
 
-    session.assistant_response(
+    run.assistant_response(
         model="gpt-5.4-mini",
         request={
             "messages": [

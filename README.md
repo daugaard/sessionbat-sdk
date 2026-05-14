@@ -68,9 +68,11 @@ session = client.session(
     },
 )
 
-session.user_message("I am locked out of my account")
+run = session.run(run_id="run_123")
 
-session.retrieval(
+run.user_message("I am locked out of my account")
+
+run.retrieval(
     query="reset password locked out",
     documents=[
         {
@@ -83,7 +85,7 @@ session.retrieval(
     metrics={"latency_ms": 81, "documents_found": 1},
 )
 
-session.tool_call(
+run.tool_call(
     tool_name="lookup_account",
     input={"account_id": "acct_987"},
     output={"status": "locked", "password_reset_available": True},
@@ -91,7 +93,7 @@ session.tool_call(
     metrics={"latency_ms": 117, "http_status": 200},
 )
 
-session.assistant_response(
+run.assistant_response(
     model="gpt-5.4-mini",
     request={"messages": [{"role": "user", "content": "I am locked out of my account"}]},
     response={"text": "I found your account. Use the reset link and follow the email prompt."},
@@ -105,6 +107,7 @@ That emits structured events like:
 {
   "type": "llm",
   "session_id": "thread_123",
+  "run_id": "run_123",
   "tags": ["production"],
   "context": {"environment": "prod", "user_id": "user_123", "workspace_id": "ws_456"},
   "observation": {
@@ -119,7 +122,7 @@ That emits structured events like:
 Import the main types from `sessionbat`:
 
 ```python
-from sessionbat import SessionBat, Session, LangChainCallbackHandler
+from sessionbat import SessionBat, Session, Run, LangChainCallbackHandler
 ```
 
 ### `SessionBat`
@@ -134,8 +137,8 @@ client = SessionBat(
 )
 ```
 
-Use `client.session(...)` to create a session and record observations against a
-stable `session_id`.
+Use `client.session(...)` to create a session with a stable `session_id`, then
+use `session.run(...)` to record observations against a specific turn or run.
 
 The SDK sends events to SessionBat ingestion by default. Pass `api_key` directly
 or set `SESSIONBAT_API_KEY`. For tests or local debugging, pass an explicit
@@ -147,15 +150,15 @@ bounded backoff, and queued events are flushed automatically during interpreter
 shutdown. Call `client.flush()` or `client.close()` when you need to wait for
 delivery before exiting a short-lived process.
 
-### `Session`
+### `Session` and `Run`
 
-A `Session` records completed observations:
+A `Session` groups runs. A `Run` records completed observations:
 
-- `session.user_message(content)`
-- `session.message(role=..., content=...)`
-- `session.assistant_response(...)`
-- `session.tool_call(...)`
-- `session.retrieval(...)`
+- `run.user_message(content)`
+- `run.message(role=..., content=...)`
+- `run.assistant_response(...)`
+- `run.tool_call(...)`
+- `run.retrieval(...)`
 
 Each call returns the generated observation id.
 

@@ -19,10 +19,11 @@ def main() -> None:
             "plan": "pro",
         },
     )
+    run = session.run(run_id="run_123")
 
-    session.user_message("I am locked out of my account")
+    run.user_message("I am locked out of my account")
 
-    session.retrieval(
+    run.retrieval(
         query="reset password locked out",
         documents=[
             {
@@ -39,7 +40,7 @@ def main() -> None:
         metrics={"latency_ms": 81, "documents_found": 1},
     )
 
-    session.tool_call(
+    run.tool_call(
         tool_name="lookup_account",
         input={"account_id": "acct_987"},
         output={"status": "locked", "password_reset_available": True},
@@ -47,7 +48,7 @@ def main() -> None:
         metrics={"latency_ms": 117, "http_status": 200},
     )
 
-    session.assistant_response(
+    run.assistant_response(
         model="gpt-5.4-mini",
         request={"messages": [{"role": "user", "content": "I am locked out of my account"}]},
         response={"text": "I found your account. Use the reset link and follow the email prompt."},

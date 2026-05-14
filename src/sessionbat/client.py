@@ -107,6 +107,44 @@ class Session:
     tags: list[str] = field(default_factory=list)
     context: dict[str, Any] = field(default_factory=dict)
 
+    def run(
+        self,
+        *,
+        run_id: str,
+        tags: list[str] | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> Run:
+        return Run(
+            session=self,
+            run_id=run_id,
+            tags=_merge_tags(self.tags, tags),
+            context=_merge_dicts(self.context, context),
+        )
+
+    def langchain_callback(
+        self,
+        *,
+        tags: list[str] | None = None,
+        context: dict[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> Any:
+        from .langchain import LangChainCallbackHandler
+
+        return LangChainCallbackHandler(
+            self,
+            tags=tags,
+            context=context,
+            metadata=metadata,
+        )
+
+
+@dataclass(slots=True)
+class Run:
+    session: Session
+    run_id: str
+    tags: list[str] = field(default_factory=list)
+    context: dict[str, Any] = field(default_factory=dict)
+
     def message(
         self,
         *,
@@ -213,22 +251,6 @@ class Session:
             context=context,
         )
 
-    def langchain_callback(
-        self,
-        *,
-        tags: list[str] | None = None,
-        context: dict[str, Any] | None = None,
-        metadata: dict[str, Any] | None = None,
-    ) -> Any:
-        from .langchain import LangChainCallbackHandler
-
-        return LangChainCallbackHandler(
-            self,
-            tags=tags,
-            context=context,
-            metadata=metadata,
-        )
-
     def _record(
         self,
         *,
@@ -252,7 +274,8 @@ class Session:
         payload = envelope.as_dict()
         payload.update(
             {
-                "session_id": self.session_id,
+                "session_id": self.session.session_id,
+                "run_id": self.run_id,
                 "observation": {
                     "kind": kind,
                     "name": name,
@@ -265,5 +288,5 @@ class Session:
                 },
             }
         )
-        self.client._send(payload)
+        self.session.client._send(payload)
         return observation_id
