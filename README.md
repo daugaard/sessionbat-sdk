@@ -24,7 +24,31 @@ Or with `pip`:
 pip install sessionbat
 ```
 
-## Quickstart
+## Quickstart 
+
+### LangChain integration
+The easist way to start is to use the built-in LangChain callback handler. Create a `SessionBat` client and pass the handler to your chain or agent:
+```python
+from sessionbat import SessionBat
+
+client = SessionBat(app="support-bot", api_key="sbat_ingest_...")
+handler = client.langchain_callback(tags=["langchain"])
+
+# Configure your chain or agent to use the handler, for example:
+result = chain.invoke(
+  {"input": "I am locked out of my account"},
+  config={"callbacks": [handler]},
+)
+
+# or using agents:
+agent.invoke(
+  {"messages": [{"role": "user", "content": "what is the weather in sf"}]},
+  config={"callbacks": [handler]},
+)
+```
+
+### Custom integration
+Or you can integrate directly with the core API for more control. Create a `SessionBat` client and use it to create a `Session` with a stable `session_id` and shared `context`. Then record observations against that session as they happen.
 
 ```python
 from sessionbat import SessionBat
@@ -134,28 +158,6 @@ A `Session` records completed observations:
 - `session.retrieval(...)`
 
 Each call returns the generated observation id.
-
-### `LangChainCallbackHandler`
-
-The LangChain adapter maps callback events onto the same observation model.
-
-```python
-from sessionbat import SessionBat
-
-client = SessionBat(app="support-bot", api_key="sbat_ingest_...")
-handler = client.langchain_callback(tags=["langchain"])
-
-result = chain.invoke(
-    {"input": "I am locked out of my account"},
-    config={"callbacks": [handler]},
-)
-```
-
-If you already have a session object, you can attach the callback to it:
-
-```python
-handler = session.langchain_callback(tags=["langchain"])
-```
 
 ## Event model
 
