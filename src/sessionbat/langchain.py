@@ -7,7 +7,7 @@ from time import monotonic
 from typing import Any
 from uuid import UUID
 
-from .client import Run as SessionBatRun
+from .client import Interaction as SessionBatInteraction
 from .client import Session, SessionBat
 
 try:  # LangChain is an optional integration dependency.
@@ -23,7 +23,7 @@ except Exception:  # pragma: no cover - exercised when LangChain is not installe
 class _RunState:
     kind: str
     name: str
-    run: SessionBatRun
+    interaction: SessionBatInteraction
     input: dict[str, Any]
     metadata: dict[str, Any] = field(default_factory=dict)
     tags: list[str] = field(default_factory=list)
@@ -68,7 +68,7 @@ class LangChainCallbackHandler(_BaseCallbackHandler):
         self.metadata = metadata or {}
         self._runs: dict[str, _RunState] = {}
         self._run_session_ids: dict[str, str] = {}
-        self._root_run_ids: dict[str, str] = {}
+        self._root_interaction_ids: dict[str, str] = {}
         self._sessions: dict[str, Session] = {}
 
     def on_chain_start(
@@ -95,11 +95,11 @@ class LangChainCallbackHandler(_BaseCallbackHandler):
         metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
-        run = self._run_for(run_id, parent_run_id=parent_run_id, metadata=metadata)
+        interaction = self._interaction_for(run_id, parent_run_id=parent_run_id, metadata=metadata)
         self._runs[_run_id(run_id)] = _RunState(
             kind="llm",
             name=_serialized_name(serialized, "llm"),
-            run=run,
+            interaction=interaction,
             input={
                 "prompts": _jsonable(prompts),
                 "serialized": _jsonable(serialized),
@@ -128,7 +128,7 @@ class LangChainCallbackHandler(_BaseCallbackHandler):
         metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
-        run = self._run_for(run_id, parent_run_id=parent_run_id, metadata=metadata)
+        interaction = self._interaction_for(run_id, parent_run_id=parent_run_id, metadata=metadata)
         callback_metadata = self._metadata(
             run_id=run_id,
             parent_run_id=parent_run_id,
@@ -139,14 +139,14 @@ class LangChainCallbackHandler(_BaseCallbackHandler):
         )
         self._record_messages_from_chat_input(
             messages,
-            run=run,
+            interaction=interaction,
             metadata=callback_metadata,
             tags=tags,
         )
         self._runs[_run_id(run_id)] = _RunState(
             kind="llm",
             name=_serialized_name(serialized, "chat_model"),
-            run=run,
+            interaction=interaction,
             input={
                 "messages": _jsonable(messages),
                 "serialized": _jsonable(serialized),
@@ -170,7 +170,7 @@ class LangChainCallbackHandler(_BaseCallbackHandler):
         state = self._pop_run(run_id, kind="llm", name="llm", parent_run_id=parent_run_id)
         response_payload = _llm_response_payload(response)
         model_metadata = _merge_dicts(state.metadata, metadata)
-        state.run.assistant_response(
+        state.interaction.assistant_response(
             model=_extract_model(response=response, metadata=model_metadata),
             request=state.input,
             response=response_payload,
@@ -200,7 +200,7 @@ class LangChainCallbackHandler(_BaseCallbackHandler):
         **kwargs: Any,
     ) -> None:
         state = self._pop_run(run_id, kind="llm", name="llm", parent_run_id=parent_run_id)
-        state.run.assistant_response(
+        state.interaction.assistant_response(
             model=_extract_model(metadata=_merge_dicts(state.metadata, metadata)),
             request=state.input,
             response=_jsonable(kwargs.get("response")),
@@ -232,11 +232,11 @@ class LangChainCallbackHandler(_BaseCallbackHandler):
         inputs: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
-        run = self._run_for(run_id, parent_run_id=parent_run_id, metadata=metadata)
+        interaction = self._interaction_for(run_id, parent_run_id=parent_run_id, metadata=metadata)
         self._runs[_run_id(run_id)] = _RunState(
             kind="tool",
             name=_serialized_name(serialized, "tool"),
-            run=run,
+            interaction=interaction,
             input=_tool_input(input_str, inputs),
             metadata=self._metadata(
                 run_id=run_id,
@@ -261,7 +261,7 @@ class LangChainCallbackHandler(_BaseCallbackHandler):
         **kwargs: Any,
     ) -> None:
         state = self._pop_run(run_id, kind="tool", name="tool", parent_run_id=parent_run_id)
-        state.run.tool_call(
+        state.interaction.tool_call(
             tool_name=state.name,
             input=state.input,
             output=_output_payload(output),
@@ -291,7 +291,7 @@ class LangChainCallbackHandler(_BaseCallbackHandler):
         **kwargs: Any,
     ) -> None:
         state = self._pop_run(run_id, kind="tool", name="tool", parent_run_id=parent_run_id)
-        state.run.tool_call(
+        state.interaction.tool_call(
             tool_name=state.name,
             input=state.input,
             error=_error_payload(error),
@@ -321,11 +321,11 @@ class LangChainCallbackHandler(_BaseCallbackHandler):
         metadata: dict[str, Any] | None = None,
         **kwargs: Any,
     ) -> None:
-        run = self._run_for(run_id, parent_run_id=parent_run_id, metadata=metadata)
+        interaction = self._interaction_for(run_id, parent_run_id=parent_run_id, metadata=metadata)
         self._runs[_run_id(run_id)] = _RunState(
             kind="retrieval",
             name=_serialized_name(serialized, "retriever"),
-            run=run,
+            interaction=interaction,
             input={"query": query, "serialized": _jsonable(serialized)},
             metadata=self._metadata(
                 run_id=run_id,
@@ -356,7 +356,7 @@ class LangChainCallbackHandler(_BaseCallbackHandler):
             parent_run_id=parent_run_id,
         )
         docs = [_document_payload(document) for document in documents]
-        state.run.retrieval(
+        state.interaction.retrieval(
             query=str(state.input.get("query", "")),
             documents=docs,
             metadata=_merge_dicts(
@@ -390,7 +390,7 @@ class LangChainCallbackHandler(_BaseCallbackHandler):
             name="retriever",
             parent_run_id=parent_run_id,
         )
-        state.run.retrieval(
+        state.interaction.retrieval(
             query=str(state.input.get("query", "")),
             error=_error_payload(error),
             metadata=_merge_dicts(
@@ -436,7 +436,7 @@ class LangChainCallbackHandler(_BaseCallbackHandler):
             _RunState(
                 kind=kind,
                 name=name,
-                run=self._run_for(run_id, parent_run_id=parent_run_id),
+                interaction=self._interaction_for(run_id, parent_run_id=parent_run_id),
                 input={},
                 metadata=self._callback_metadata(run_id=run_id, parent_run_id=parent_run_id),
                 parent_run_id=_optional_run_id(parent_run_id),
@@ -497,7 +497,7 @@ class LangChainCallbackHandler(_BaseCallbackHandler):
         self,
         message_batches: list[list[Any]],
         *,
-        run: SessionBatRun,
+        interaction: SessionBatInteraction,
         metadata: dict[str, Any],
         tags: list[str] | None,
     ) -> None:
@@ -505,7 +505,7 @@ class LangChainCallbackHandler(_BaseCallbackHandler):
             role = _message_role(message)
             if role is None:
                 continue
-            run.message(
+            interaction.message(
                 role=role,
                 content=_message_content(message),
                 metadata=_merge_dicts(
@@ -519,20 +519,23 @@ class LangChainCallbackHandler(_BaseCallbackHandler):
                 context=self.context,
             )
 
-    def _run_for(
+    def _interaction_for(
         self,
         run_id: UUID,
         *,
         parent_run_id: UUID | None = None,
         metadata: dict[str, Any] | None = None,
-    ) -> SessionBatRun:
+    ) -> SessionBatInteraction:
         session = self._session_for(
             run_id,
             parent_run_id=parent_run_id,
             metadata=metadata,
         )
-        sessionbat_run_id = self._sessionbat_run_id_for(run_id, parent_run_id=parent_run_id)
-        return session.run(run_id=sessionbat_run_id)
+        sessionbat_interaction_id = self._sessionbat_interaction_id_for(
+            run_id,
+            parent_run_id=parent_run_id,
+        )
+        return session.interaction(interaction_id=sessionbat_interaction_id)
 
     def _session_for(
         self,
@@ -571,13 +574,13 @@ class LangChainCallbackHandler(_BaseCallbackHandler):
             metadata=metadata,
         )
         self._run_session_ids[_run_id(run_id)] = session_id
-        self._root_run_ids[_run_id(run_id)] = self._sessionbat_run_id_for(
+        self._root_interaction_ids[_run_id(run_id)] = self._sessionbat_interaction_id_for(
             run_id,
             parent_run_id=parent_run_id,
         )
         return session_id
 
-    def _sessionbat_run_id_for(
+    def _sessionbat_interaction_id_for(
         self,
         run_id: UUID,
         *,
@@ -586,9 +589,9 @@ class LangChainCallbackHandler(_BaseCallbackHandler):
         if parent_run_id is None:
             return _run_id(run_id)
 
-        parent_root_run_id = self._root_run_ids.get(_run_id(parent_run_id))
-        if parent_root_run_id:
-            return parent_root_run_id
+        parent_root_interaction_id = self._root_interaction_ids.get(_run_id(parent_run_id))
+        if parent_root_interaction_id:
+            return parent_root_interaction_id
         return _run_id(parent_run_id)
 
     def _session_id_for(

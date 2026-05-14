@@ -107,16 +107,16 @@ class Session:
     tags: list[str] = field(default_factory=list)
     context: dict[str, Any] = field(default_factory=dict)
 
-    def run(
+    def interaction(
         self,
         *,
-        run_id: str,
+        interaction_id: str,
         tags: list[str] | None = None,
         context: dict[str, Any] | None = None,
-    ) -> Run:
-        return Run(
+    ) -> Interaction:
+        return Interaction(
             session=self,
-            run_id=run_id,
+            interaction_id=interaction_id,
             tags=_merge_tags(self.tags, tags),
             context=_merge_dicts(self.context, context),
         )
@@ -139,9 +139,9 @@ class Session:
 
 
 @dataclass(slots=True)
-class Run:
+class Interaction:
     session: Session
-    run_id: str
+    interaction_id: str
     tags: list[str] = field(default_factory=list)
     context: dict[str, Any] = field(default_factory=dict)
 
@@ -275,7 +275,7 @@ class Run:
         payload.update(
             {
                 "session_id": self.session.session_id,
-                "run_id": self.run_id,
+                "interaction_id": self.interaction_id,
                 "observation": {
                     "kind": kind,
                     "name": name,

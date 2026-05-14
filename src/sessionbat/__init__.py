@@ -1,10 +1,10 @@
-from .client import Run, Session, SessionBat
+from .client import Interaction, Session, SessionBat
 from .langchain import LangChainCallbackHandler, SessionBatCallbackHandler
 
 __all__ = [
     "SessionBat",
     "Session",
-    "Run",
+    "Interaction",
     "LangChainCallbackHandler",
     "SessionBatCallbackHandler",
 ]
