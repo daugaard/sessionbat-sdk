@@ -7,11 +7,12 @@ from collections.abc import Iterator
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from queue import Queue
+from urllib.parse import urlsplit
 
 import pytest
 
 from sessionbat import SessionBat
-from sessionbat.transports import IngestionTransport, MemoryTransport
+from sessionbat.transports import DEFAULT_INGESTION_ENDPOINT, IngestionTransport, MemoryTransport
 
 
 class TestSessionBatClient:
@@ -167,7 +168,8 @@ def ingestion_server() -> Iterator[str]:
     thread = threading.Thread(target=server.serve_forever)
     thread.start()
     try:
-        yield f"http://127.0.0.1:{server.server_port}/api/v1/ingestion/events"
+        path = urlsplit(DEFAULT_INGESTION_ENDPOINT).path
+        yield f"http://127.0.0.1:{server.server_port}{path}"
     finally:
         server.shutdown()
         thread.join()
@@ -223,7 +225,7 @@ class TestIngestionTransport:
         assert client.flush(timeout=1.0)
         request = _RecordingHandler.requests[0]
         payload = request["body"]
-        assert request["path"] == "/api/v1/ingestion/events"
+        assert request["path"] == urlsplit(DEFAULT_INGESTION_ENDPOINT).path
         assert request["headers"]["Accept"] == "application/json"
         assert request["headers"]["Authorization"] == "Bearer sbat_ingest_test"
         assert request["headers"]["Content-Type"] == "application/json"
