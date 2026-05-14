@@ -178,9 +178,9 @@ SessionBat keeps the shape intentionally small:
 ## Development
 
 ```bash
-uv interaction pytest
-uv interaction ruff check .
-uv interaction ruff format --check .
+uv run pytest
+uv run ruff check .
+uv run ruff format --check .
 ```
 
 ## Repository layout
