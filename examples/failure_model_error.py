@@ -19,10 +19,11 @@ def main() -> None:
             "plan": "starter",
         },
     )
+    interaction = session.interaction(interaction_id="interaction_model_error")
 
-    session.user_message("What invoices are overdue for Acme Corp?")
+    interaction.user_message("What invoices are overdue for Acme Corp?")
 
-    session.assistant_response(
+    interaction.assistant_response(
         model="gpt-5.4-mini",
         request={
             "messages": [

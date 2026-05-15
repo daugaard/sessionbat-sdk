@@ -120,6 +120,7 @@ class TestLangChainIntegration:
 
         assert event["type"] == "tool"
         assert event["session_id"] == "thread_tool"
+        assert event["interaction_id"]
         assert event["tags"] == ["development", "langchain", "tool"]
         assert observation["kind"] == "tool"
         assert observation["name"] == "lookup_account"
@@ -154,6 +155,7 @@ class TestLangChainIntegration:
         assert result.content == "Use the password reset link."
         assert len(self.transport.events) == 3
         assert len({event["session_id"] for event in self.transport.events}) == 1
+        assert len({event["interaction_id"] for event in self.transport.events}) == 1
 
         system_event = self.transport.events[0]
         system_observation = system_event["observation"]
@@ -232,6 +234,7 @@ class TestLangChainIntegration:
         assert result.content == "Use the password reset link from the sign-in page."
         assert len(self.transport.events) == 4
         assert len({event["session_id"] for event in self.transport.events}) == 1
+        assert len({event["interaction_id"] for event in self.transport.events}) == 1
 
         retrieval_observation = self.transport.events[0]["observation"]
         system_observation = self.transport.events[1]["observation"]
@@ -284,6 +287,26 @@ class TestLangChainIntegration:
         )
 
         assert {event["session_id"] for event in self.transport.events} == {"thread_123"}
+        assert len({event["interaction_id"] for event in self.transport.events}) == 1
+
+    def test_separate_langchain_invocations_get_separate_interaction_ids(self) -> None:
+        handler = self.client.langchain_callback(tags=["langchain"])
+        chain = ChatPromptTemplate.from_messages([("human", "{question}")]) | FakeListChatModel(
+            responses=["First answer.", "Second answer."],
+            name="FakeSupportChat",
+        )
+
+        chain.invoke({"question": "First"}, config={"callbacks": [handler]})
+        first_interaction_ids = {event["interaction_id"] for event in self.transport.events}
+
+        self.transport.events.clear()
+
+        chain.invoke({"question": "Second"}, config={"callbacks": [handler]})
+        second_interaction_ids = {event["interaction_id"] for event in self.transport.events}
+
+        assert len(first_interaction_ids) == 1
+        assert len(second_interaction_ids) == 1
+        assert first_interaction_ids != second_interaction_ids
 
 
 def _format_documents(documents: list[Document]) -> str:

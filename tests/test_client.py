@@ -29,9 +29,12 @@ class TestSessionBatClient:
             tags=["support", "password-reset"],
             context={"workspace_id": "ws_123", "user_id": "user_123"},
         )
+        self.interaction = self.session.interaction(
+            interaction_id="interaction_123", tags=["turn-1"]
+        )
 
     def test_records_user_message_payload(self) -> None:
-        observation_id = self.session.user_message(
+        observation_id = self.interaction.user_message(
             "I am locked out",
             tags=["urgent", "support"],
             context={"locale": "en-US"},
@@ -44,7 +47,8 @@ class TestSessionBatClient:
         assert event["id"] == observation_id
         assert event["type"] == "message"
         assert event["session_id"] == "thread_123"
-        assert event["tags"] == ["production", "support", "password-reset", "urgent"]
+        assert event["interaction_id"] == "interaction_123"
+        assert event["tags"] == ["production", "support", "password-reset", "turn-1", "urgent"]
         assert event["context"] == {
             "environment": "prod",
             "workspace_id": "ws_123",
@@ -63,7 +67,7 @@ class TestSessionBatClient:
         json.dumps(event)
 
     def test_records_assistant_response_payload(self) -> None:
-        self.session.assistant_response(
+        self.interaction.assistant_response(
             model="gpt-test",
             request={"messages": [{"role": "user", "content": "Help"}]},
             response={"text": "Use the reset link."},
@@ -81,7 +85,7 @@ class TestSessionBatClient:
         assert observation["metrics"] == {"input_tokens": 10, "output_tokens": 6}
 
     def test_records_tool_call_payload(self) -> None:
-        self.session.tool_call(
+        self.interaction.tool_call(
             tool_name="lookup_account",
             input={"account_id": "acct_123"},
             output={"status": "locked"},
@@ -92,6 +96,7 @@ class TestSessionBatClient:
         observation = event["observation"]
 
         assert event["type"] == "tool"
+        assert event["interaction_id"] == "interaction_123"
         assert observation["kind"] == "tool"
         assert observation["name"] == "lookup_account"
         assert observation["input"] == {"account_id": "acct_123"}
@@ -99,7 +104,7 @@ class TestSessionBatClient:
         assert observation["metrics"] == {"latency_ms": 117}
 
     def test_records_retrieval_payload(self) -> None:
-        self.session.retrieval(
+        self.interaction.retrieval(
             query="reset password",
             documents=[{"id": "doc_123", "score": 0.93}],
             metadata={"index": "support_articles"},
@@ -116,7 +121,7 @@ class TestSessionBatClient:
         assert observation["metadata"] == {"index": "support_articles"}
 
     def test_records_errors_on_failed_operations(self) -> None:
-        self.session.tool_call(
+        self.interaction.tool_call(
             tool_name="send_email",
             input={"template": "reset"},
             error={"type": "TimeoutError", "message": "email service timed out"},
@@ -130,6 +135,12 @@ class TestSessionBatClient:
             "type": "TimeoutError",
             "message": "email service timed out",
         }
+
+    def test_session_records_observations_only_through_interactions(self) -> None:
+        assert not hasattr(self.session, "user_message")
+        assert not hasattr(self.session, "assistant_response")
+        assert not hasattr(self.session, "tool_call")
+        assert not hasattr(self.session, "retrieval")
 
 
 class _RecordingHandler(BaseHTTPRequestHandler):
@@ -201,8 +212,10 @@ class TestIngestionTransport:
         monkeypatch.setenv("SESSIONBAT_API_KEY", "sbat_ingest_env")
 
         client = SessionBat(endpoint=ingestion_server)
-        session = client.session(session_id="thread_123")
-        session.tool_call(tool_name="lookup_account", input={"account_id": "acct_123"})
+        interaction = client.session(session_id="thread_123").interaction(
+            interaction_id="interaction_123"
+        )
+        interaction.tool_call(tool_name="lookup_account", input={"account_id": "acct_123"})
 
         assert client.flush(timeout=1.0)
         request = _RecordingHandler.requests[0]
@@ -210,13 +223,13 @@ class TestIngestionTransport:
 
     def test_posts_sdk_payload_with_bearer_auth(self, ingestion_server: str) -> None:
         client = SessionBat(api_key="sbat_ingest_test", endpoint=ingestion_server)
-        session = client.session(
+        interaction = client.session(
             session_id="thread_123",
             tags=["support"],
             context={"user_id": "user_123"},
-        )
+        ).interaction(interaction_id="interaction_123", tags=["turn-1"])
 
-        observation_id = session.tool_call(
+        observation_id = interaction.tool_call(
             tool_name="lookup_account",
             input={"account_id": "acct_123"},
             output={"status": "locked"},
@@ -232,7 +245,8 @@ class TestIngestionTransport:
         assert payload["id"] == observation_id
         assert payload["type"] == "tool"
         assert payload["session_id"] == "thread_123"
-        assert payload["tags"] == ["support"]
+        assert payload["interaction_id"] == "interaction_123"
+        assert payload["tags"] == ["support", "turn-1"]
         assert payload["context"] == {"user_id": "user_123"}
         assert payload["observation"]["kind"] == "tool"
         assert payload["observation"]["name"] == "lookup_account"
